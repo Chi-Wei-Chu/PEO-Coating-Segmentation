@@ -6,8 +6,6 @@ from tqdm import tqdm
 from skimage.io import imread, imshow
 from skimage import img_as_ubyte, transform, util
 # from skimage.transform import resize
-from sklearn.model_selection import train_test_split
-from sklearn.model_selection import KFold
 import matplotlib.pyplot as plt
 from PIL import Image
 import csv
@@ -32,17 +30,7 @@ IMG_CHANNELS = 1
 TRAIN_PATH = '/home/vcpuser/train 120 refined/'
 TEST_PATH = '/home/vcpuser/test 80 refined/'
 
-# os.walk is used to get a list of subdirectories within the TRAIN_PATH and TEST_PATH directories,
-# and the resulting subdirectory names are stored in train_ids and test_ids, respectively.
-train_ids = next(os.walk(TRAIN_PATH))[1]   # [1] retrieves only the subdirectories within the current directory
-test_ids = next(os.walk(TEST_PATH))[1]
-
-print(train_ids)
-print(len(train_ids))
-print(test_ids)
-print(len(test_ids))
-
-### Define metrics ###
+### Defines ###
 
 precision_metric = tf.keras.metrics.Precision()
 recall_metric = tf.keras.metrics.Recall()
@@ -81,6 +69,8 @@ def adjust_contrast(image, contrast_factor):
 
 ### Train Images ###
 
+train_ids = next(os.walk(TRAIN_PATH))[1]   
+test_ids = next(os.walk(TEST_PATH))[1]
 X_train = np.zeros((len(train_ids), SIZE, SIZE, IMG_CHANNELS), dtype=np.uint8)
 Y_train = np.zeros((len(train_ids), SIZE, SIZE, 1), dtype=bool)
 
@@ -121,7 +111,7 @@ for n in tqdm(range(len(X_train))):
     augmented_masks.extend([np.fliplr(mask) > 0 for mask in augmented_masks])  # Flip and convert masks to binary
 
     for img in augmented_images:
-        contrast_factor = random.uniform(0.5, 1.5)  # Randomly choose a contrast factor between 0.1 and 2
+        contrast_factor = random.uniform(0.5, 1.5) # Randomly choose a contrast factor between 0.5 and 1.5
         img_contrast = adjust_contrast(img, contrast_factor)
         X_train_aug.append(img_contrast)
 
@@ -133,7 +123,7 @@ Y_train_aug = np.array(Y_train_aug, dtype=bool)
 print("X_train_aug length: ", len(X_train_aug))
 print("Y_train_aug length: ", len(Y_train_aug))
 
-# test images
+#### test images ###
 X_test = np.zeros((len(test_ids), SIZE, SIZE, IMG_CHANNELS), dtype=np.uint8)
 Y_test = np.zeros((len(test_ids), SIZE, SIZE, 1), dtype=bool)
 
@@ -169,7 +159,7 @@ CLIPVALUE = 1
 BATCH_SIZE = 4
 
 ### Model Architecture ###
-### Conv - ReLU  (Basic U-Net 9) ###
+### Basic U-Net 9 ###
 
 def contracting_block(input, num_filters, dropout_rate):
     conv = tf.keras.layers.Conv2D(num_filters, (3, 3), activation='relu', kernel_initializer='he_normal', padding='same')(input)
