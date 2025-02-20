@@ -1,0 +1,33 @@
+def contracting_block(input, NUM_FILTERS, DROPOUT_RATE):
+    conv = tf.keras.layers.Conv2D(NUM_FILTERS, (3, 3), activation='relu', kernel_initializer='he_normal', padding='same')(input)
+    conv = tf.keras.layers.Conv2D(NUM_FILTERS, (3, 3), activation='relu', kernel_initializer='he_normal', padding='same')(conv)
+    drop = tf.keras.layers.Dropout(DROPOUT_RATE)(conv)
+    pool = tf.keras.layers.MaxPooling2D((2, 2))(drop)
+    return drop, pool
+
+def expansive_block(input, skip_tensor, NUM_FILTERS, DROPOUT_RATE):
+    trans_conv = tf.keras.layers.Conv2DTranspose(NUM_FILTERS, (2, 2), strides=(2, 2), padding='same')(input)
+    concat = tf.keras.layers.concatenate([trans_conv, skip_tensor])
+    conv = tf.keras.layers.Conv2D(NUM_FILTERS, (3, 3), activation='relu', kernel_initializer='he_normal', padding='same')(concat)
+    conv = tf.keras.layers.Conv2D(NUM_FILTERS, (3, 3), activation='relu', kernel_initializer='he_normal', padding='same')(conv)
+    drop = tf.keras.layers.Dropout(DROPOUT_RATE)(conv)
+    return drop
+
+# Input layer
+input_layer = tf.keras.layers.Input(shape=(SIZE, SIZE, IMG_CHANNELS))
+normalized = tf.keras.layers.Lambda(lambda x: x / 255.0)(input_layer)
+
+# Contracting path
+conv1, pool1 = contracting_block(normalized, NUM_FILTERS, DROPOUT_RATE)
+conv2, pool2 = contracting_block(pool1, NUM_FILTERS*2, DROPOUT_RATE)
+conv3, pool3 = contracting_block(pool2, NUM_FILTERS*4, DROPOUT_RATE)
+conv4, _ = contracting_block(pool3, NUM_FILTERS*8, DROPOUT_RATE)
+
+
+# Expansive path
+expan1 = expansive_block(conv4, conv3, NUM_FILTERS*4, DROPOUT_RATE)
+expan2 = expansive_block(expan1, conv2, NUM_FILTERS*2, DROPOUT_RATE)
+expan3 = expansive_block(expan2, conv1, NUM_FILTERS, DROPOUT_RATE)
+
+# Output layer
+final_output = tf.keras.layers.Conv2D(1, (1, 1), activation='sigmoid')(expan3)
