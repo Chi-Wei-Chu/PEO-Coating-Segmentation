@@ -1,0 +1,48 @@
+def atrous_conv_block(input, num_filters):
+    conv1 = tf.keras.layers.Conv2D(num_filters//3, (3, 3), activation='relu', kernel_initializer='he_normal', padding='same', dilation_rate=1)(input)
+    conv2 = tf.keras.layers.Conv2D(num_filters//3, (3, 3), activation='relu', kernel_initializer='he_normal', padding='same', dilation_rate=3)(input)
+    conv3 = tf.keras.layers.Conv2D(num_filters//3, (3, 3), activation='relu', kernel_initializer='he_normal', padding='same', dilation_rate=5)(input)
+    concat = tf.keras.layers.concatenate([conv1, conv2, conv3])
+    return concat
+
+def Encoder_Atrous_contracting_block(input, num_filters, dropout_rate):
+    conv = atrous_conv_block(input, num_filters)
+    conv = tf.keras.layers.Conv2D(num_filters, (1, 1), activation='relu', kernel_initializer='he_normal', padding='same')(conv)
+    drop = tf.keras.layers.Dropout(dropout_rate)(conv)
+    pool = tf.keras.layers.MaxPooling2D((2, 2))(drop)
+    return drop, pool
+
+def Bridge_Atrous_contracting_block(input, num_filters, dropout_rate):
+    conv = atrous_conv_block(input, num_filters)
+    conv = tf.keras.layers.Conv2D(num_filters, (1, 1), activation='relu', kernel_initializer='he_normal', padding='same')(conv)
+    drop = tf.keras.layers.Dropout(dropout_rate)(conv)
+    pool = tf.keras.layers.MaxPooling2D((2, 2))(drop)
+    return drop, pool
+
+def expansive_block(input, skip_tensor, num_filters, dropout_rate):
+    upsample = tf.keras.layers.Conv2DTranspose(num_filters, (2, 2), strides=(2, 2), padding='same')(input)
+    concat = tf.keras.layers.concatenate([upsample, skip_tensor])
+    conv = tf.keras.layers.Conv2D(num_filters, (3, 3), activation='relu', kernel_initializer='he_normal', padding='same')(concat)
+    conv = tf.keras.layers.Conv2D(num_filters, (3, 3), activation='relu', kernel_initializer='he_normal', padding='same')(conv)
+    drop = tf.keras.layers.Dropout(dropout_rate)(conv)
+    return drop
+
+# Input layer
+input_layer = tf.keras.layers.Input(shape=(SIZE, SIZE, IMG_CHANNELS))
+normalized = tf.keras.layers.Lambda(lambda x: x / 255.0)(input_layer)
+
+# Contracting path
+conv1, pool1 = Encoder_Atrous_contracting_block(normalized, NUM_FILTERS, DROPOUT_RATE)  
+conv2, pool2 = Encoder_Atrous_contracting_block(pool1, NUM_FILTERS*2, DROPOUT_RATE)       
+conv3, pool3 = Encoder_Atrous_contracting_block(pool2, NUM_FILTERS*4, DROPOUT_RATE)        
+conv4, pool4 = Encoder_Atrous_contracting_block(pool3, NUM_FILTERS*8, DROPOUT_RATE)         
+conv5, _ = Bridge_Atrous_contracting_block(pool4, NUM_FILTERS*16, DROPOUT_RATE)
+
+# Expansive path
+expan1 = expansive_block(conv5, conv4, NUM_FILTERS*8, DROPOUT_RATE)
+expan2 = expansive_block(expan1, conv3, NUM_FILTERS*4, DROPOUT_RATE)
+expan3 = expansive_block(expan2, conv2, NUM_FILTERS*2, DROPOUT_RATE)
+expan4 = expansive_block(expan3, conv1, NUM_FILTERS, DROPOUT_RATE)
+
+# Output layer
+final_output = tf.keras.layers.Conv2D(1, (1, 1), activation='sigmoid')(expan4)
