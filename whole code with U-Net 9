@@ -5,13 +5,11 @@ import numpy as np
 from tqdm import tqdm
 from skimage.io import imread, imshow
 from skimage import img_as_ubyte, transform, util
-# from skimage.transform import resize
 import matplotlib.pyplot as plt
 from PIL import Image
 import csv
 import pandas as pd
 import openpyxl
-
 
 # Ensure reproducibility
 os.environ['TF_DETERMINISTIC_OPS'] = '1'
@@ -27,16 +25,24 @@ tf.config.threading.set_inter_op_parallelism_threads(1)
 SIZE = 800
 IMG_CHANNELS = 1
 
-TRAIN_PATH = '/home/vcpuser/train 120 refined/'
-TEST_PATH = '/home/vcpuser/test 80 refined/'
+TRAIN_PATH = '/content/drive/MyDrive/U-net/train 120 refined/'
+VAL_PATH = '/content/drive/MyDrive/U-net/validation 40 refined/'
+TEST_PATH = '/content/drive/MyDrive/U-net/test 40 refined/'
 
-### Defines ###
+# os.walk is used to get a list of subdirectories within the TRAIN_PATH and TEST_PATH directories,
+# and the resulting subdirectory names are stored in train_ids and test_ids, respectively.
+train_ids = next(os.walk(TRAIN_PATH))[1]   # [1] retrieves only the subdirectories within the current directory
+val_ids = next(os.walk(VAL_PATH))[1]
+test_ids = next(os.walk(TEST_PATH))[1]
 
+# Define metrics
+accuracy_metric = tf.keras.metrics.BinaryAccuracy()
 precision_metric = tf.keras.metrics.Precision()
 recall_metric = tf.keras.metrics.Recall()
-accuracy_metric = tf.keras.metrics.BinaryAccuracy()
 
 def f1_score(y_true, y_pred):
+    y_true = tf.keras.backend.cast(y_true, 'float32')
+    y_pred = tf.keras.backend.cast(y_pred, 'float32')
     true_positives = tf.keras.backend.sum(tf.keras.backend.round(tf.keras.backend.clip(y_true * y_pred, 0, 1)))
     predicted_positives = tf.keras.backend.sum(tf.keras.backend.round(tf.keras.backend.clip(y_pred, 0, 1)))
     possible_positives = tf.keras.backend.sum(tf.keras.backend.round(tf.keras.backend.clip(y_true, 0, 1)))
@@ -47,18 +53,22 @@ def f1_score(y_true, y_pred):
     f1 = 2 * (precision * recall) / (precision + recall + tf.keras.backend.epsilon())
     return f1
 
+
 def IoU(y_true, y_pred):
     # Clip predictions and ground truths to binary values (0 or 1)
+    y_true = tf.keras.backend.cast(y_true, 'float32')
+    y_pred = tf.keras.backend.cast(y_pred, 'float32')
+
     y_true = tf.keras.backend.round(tf.keras.backend.clip(y_true, 0, 1))
     y_pred = tf.keras.backend.round(tf.keras.backend.clip(y_pred, 0, 1))
-    
+
     # Calculate the intersection and union
     intersection = tf.keras.backend.sum(y_true * y_pred)
     union = tf.keras.backend.sum(y_true) + tf.keras.backend.sum(y_pred) - intersection
-    
+
     # Calculate IoU
     iou = intersection / (union + tf.keras.backend.epsilon())
-    
+
     return iou
 
 def adjust_contrast(image, contrast_factor):
@@ -66,13 +76,13 @@ def adjust_contrast(image, contrast_factor):
     mean = np.mean(image)
     return np.clip((image - mean) * contrast_factor + mean, 0, 255).astype(np.uint8)
 
-
 ### Train Images ###
 
-train_ids = next(os.walk(TRAIN_PATH))[1]   
-test_ids = next(os.walk(TEST_PATH))[1]
+# store the preprocessed images and their corresponding binary masks
 X_train = np.zeros((len(train_ids), SIZE, SIZE, IMG_CHANNELS), dtype=np.uint8)
 Y_train = np.zeros((len(train_ids), SIZE, SIZE, 1), dtype=bool)
+
+print('Processing training data')
 
 # Iterate through all the training IDs
 for index, id_ in tqdm(enumerate(train_ids), total=len(train_ids)):
@@ -91,6 +101,7 @@ for index, id_ in tqdm(enumerate(train_ids), total=len(train_ids)):
     mask = mask > 0  # Convert grayscale to binary mask
     mask = np.expand_dims(mask, axis=-1)  # Ensure mask has 3 dimensions
     Y_train[index] = mask
+
 
 # Image augmentation for the training data
 X_train_aug = []
@@ -111,7 +122,7 @@ for n in tqdm(range(len(X_train))):
     augmented_masks.extend([np.fliplr(mask) > 0 for mask in augmented_masks])  # Flip and convert masks to binary
 
     for img in augmented_images:
-        contrast_factor = random.uniform(0.5, 1.5) # Randomly choose a contrast factor between 0.5 and 1.5
+        contrast_factor = random.uniform(0.5, 1.5)  # Randomly choose a contrast factor between 0.5 and 1.5
         img_contrast = adjust_contrast(img, contrast_factor)
         X_train_aug.append(img_contrast)
 
@@ -123,7 +134,31 @@ Y_train_aug = np.array(Y_train_aug, dtype=bool)
 print("X_train_aug length: ", len(X_train_aug))
 print("Y_train_aug length: ", len(Y_train_aug))
 
-#### test images ###
+# validation images
+X_val = np.zeros((len(val_ids), SIZE, SIZE, IMG_CHANNELS), dtype=np.uint8)
+Y_val = np.zeros((len(val_ids), SIZE, SIZE, 1), dtype=bool)
+
+print('Processing validation data')
+
+# Iterate through all the training IDs
+for index, id_ in tqdm(enumerate(val_ids), total=len(val_ids)):
+    # Construct the paths for the image and mask
+    img_path = f"{VAL_PATH}{id_}/image/{id_}.jpg"
+    mask_path = f"{VAL_PATH}{id_}/mask/{id_}.png"
+
+    # Load and normalize the image
+    image = imread(img_path, as_gray=True)
+    image = np.uint8(image)
+    image = np.expand_dims(image, axis=-1)  # Ensure image has 3 dimensions
+    X_val[index] = image
+
+    # Load and prepare the mask
+    mask = imread(mask_path, as_gray=True)
+    mask = mask > 0  # Convert grayscale to binary mask
+    mask = np.expand_dims(mask, axis=-1)  # Ensure mask has 3 dimensions
+    Y_val[index] = mask
+
+# test images
 X_test = np.zeros((len(test_ids), SIZE, SIZE, IMG_CHANNELS), dtype=np.uint8)
 Y_test = np.zeros((len(test_ids), SIZE, SIZE, 1), dtype=bool)
 
@@ -146,11 +181,6 @@ for index, id_ in tqdm(enumerate(test_ids), total=len(test_ids)):
     mask = mask > 0  # Convert grayscale to binary mask
     mask = np.expand_dims(mask, axis=-1)  # Ensure mask has 3 dimensions
     Y_test[index] = mask
-    
-print("X_test length: ", len(X_test))
-print("Y_test length: ", len(Y_test))
-
-### Hyperparameters ###
 
 NUM_FILTERS = 24
 DROPOUT_RATE = 0.2
@@ -159,7 +189,7 @@ CLIPVALUE = 1
 BATCH_SIZE = 4
 
 ### Model Architecture ###
-### Basic U-Net 9 ###
+### U-Net 9 ###
 
 def contracting_block(input, num_filters, dropout_rate):
     conv = tf.keras.layers.Conv2D(num_filters, (3, 3), activation='relu', kernel_initializer='he_normal', padding='same')(input)
@@ -200,18 +230,59 @@ final_output = tf.keras.layers.Conv2D(1, (1, 1), activation='sigmoid')(expan4)
 model = tf.keras.Model(inputs=[input_layer], outputs=[final_output])
 model.summary()
 
+# Define callbacks
 callbacks = [
-tf.keras.callbacks.EarlyStopping(patience=100, monitor='val_f1_score', mode='max', restore_best_weights=True),
-tf.keras.callbacks.TensorBoard(log_dir='logs')
+    tf.keras.callbacks.EarlyStopping(patience=100, monitor='val_f1_score', mode='max', restore_best_weights=True),
+    tf.keras.callbacks.ModelCheckpoint(filepath=f'/content/drive/MyDrive/U-net/segmented_/Final_Test_U-net_9_120img_filter{NUM_FILTERS}_Drop{DROPOUT_RATE}_LR{LEARNING_RATE}_clip{CLIPVALUE}_batchsize{BATCH_SIZE}.keras',
+                    monitor='val_f1_score', save_best_only=True, mode='max', verbose=1),
+    tf.keras.callbacks.TensorBoard(log_dir='logs')
 ]
 
+# Compile the model
 optimizer = tf.keras.optimizers.Adam(learning_rate=LEARNING_RATE, clipvalue=CLIPVALUE)
-model.compile(optimizer=optimizer, loss='binary_crossentropy', metrics=[accuracy_metric, precision_metric, recall_metric, f1_score, IoU])
-results = model.fit(X_train_aug, Y_train_aug, batch_size=BATCH_SIZE, epochs=100, validation_data=(X_test, Y_test), callbacks=callbacks)
 
-# Save the trained model
-model.save(f'/home/vcpuser/Final segmented_/Final_Test_Basic_U-net_9_120img_filter{NUM_FILTERS}_Drop{DROPOUT_RATE}_LR{LEARNING_RATE}_clip{CLIPVALUE}_batchsize{BATCH_SIZE}.keras')
+model.compile(optimizer=optimizer, loss='binary_crossentropy',
+              metrics=[accuracy_metric, precision_metric, recall_metric, f1_score, IoU])
+
+# Train the model
+results = model.fit(X_train_aug, Y_train_aug, batch_size=BATCH_SIZE, epochs=100,
+                    validation_data=(X_val, Y_val), callbacks=callbacks)
+
+# Load the best saved model if needed
+best_model = tf.keras.models.load_model(f'/content/drive/MyDrive/U-net/segmented_/Final_Test_U-net_9_120img_filter{NUM_FILTERS}_Drop{DROPOUT_RATE}_LR{LEARNING_RATE}_clip{CLIPVALUE}_batchsize{BATCH_SIZE}.keras',
+    safe_mode=False, custom_objects={'f1_score': f1_score, 'IoU':IoU})
+
+### validation image evaluation metrics ###
+def batch_predict(model, data, batch_size):
+  predictions = []
+  for i in range(0, len(data), batch_size):
+      batch_data = data[i:i + batch_size]
+      batch_predictions = model.predict(batch_data)
+      predictions.append(batch_predictions)
+  return np.concatenate(predictions, axis=0)
+
+# Make predictions in batches
+batch_size = 10  # Adjust batch size according to your GPU memory capacity
+prediction_validation = batch_predict(best_model, X_test, batch_size=batch_size)
+
+# Convert predictions to binary
+prediction_validation_binary = prediction_validation > 0.5
+
+# Calculate precision, recall, and F1 score
+accuracy_validation = metrics.accuracy_score(Y_test.flatten(), prediction_validation_binary.flatten())
+precision_validation = metrics.precision_score(Y_test.flatten(), prediction_validation_binary.flatten(), average='binary')
+recall_validation = metrics.recall_score(Y_test.flatten(), prediction_validation_binary.flatten(), average='binary')
+f1_validation = metrics.f1_score(Y_test.flatten(), prediction_validation_binary.flatten(), average='binary')
+IoU_validation = metrics.jaccard_score(Y_test.flatten(), prediction_validation_binary.flatten())
+
+# Print out the results
+print(f'Final_Test_U-net_9_120img_filter{NUM_FILTERS}_Drop{DROPOUT_RATE}_LR{LEARNING_RATE}_clip{CLIPVALUE}_batchsize{BATCH_SIZE}')
+print(f'Accuracy: {accuracy_validation:.4f}')
+print(f'Precision: {precision_validation:.4f}')
+print(f'Recall: {recall_validation:.4f}')
+print(f'F1 Score: {f1_validation:.4f}')
+print(f'IoU: {IoU_validation:.4f}')
 
 # Create a DataFrame from the training history and save to a Excel file
 history_df = pd.DataFrame(results.history)
-history_df.to_excel(f'/home/vcpuser/Final segmented_/Final_Test_Basic_U-net_9_120img_filter{NUM_FILTERS}_Drop{DROPOUT_RATE}_LR{LEARNING_RATE}_clip{CLIPVALUE}_batchsize{BATCH_SIZE}.xlsx', index=False)
+history_df.to_excel(f'/content/drive/MyDrive/U-net/segmented_/Final_Test_U-net_9_120img_filter{NUM_FILTERS}_Drop{DROPOUT_RATE}_LR{LEARNING_RATE}_clip{CLIPVALUE}_batchsize{BATCH_SIZE}.xlsx', index=False)
