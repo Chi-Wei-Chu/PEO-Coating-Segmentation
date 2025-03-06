@@ -1,7 +1,7 @@
 def atrous_conv_block(input, num_filters):
     conv1 = tf.keras.layers.Conv2D(num_filters//3, (3, 3), activation='relu', kernel_initializer='he_normal', padding='same', dilation_rate=1)(input)
-    conv2 = tf.keras.layers.Conv2D(num_filters//3, (3, 3), activation='relu', kernel_initializer='he_normal', padding='same', dilation_rate=3)(input)
-    conv3 = tf.keras.layers.Conv2D(num_filters//3, (3, 3), activation='relu', kernel_initializer='he_normal', padding='same', dilation_rate=5)(input)
+    conv2 = tf.keras.layers.Conv2D(num_filters//3, (3, 3), activation='relu', kernel_initializer='he_normal', padding='same', dilation_rate=2)(input)
+    conv3 = tf.keras.layers.Conv2D(num_filters//3, (3, 3), activation='relu', kernel_initializer='he_normal', padding='same', dilation_rate=4)(input)
     concat = tf.keras.layers.concatenate([conv1, conv2, conv3])
     return concat
 
