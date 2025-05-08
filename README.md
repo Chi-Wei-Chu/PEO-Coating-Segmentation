@@ -12,12 +12,8 @@ Model training in our research was conducted on Google Colab, leveraging an NVID
 
 This study uses a dataset of 200 annotated SEM images of Plasma Electrolytic Oxidation (PEO) coatings, each with a resolution of 800×800 pixels and a corresponding binary segmentation mask.
 
-- **Train 120 refined**: Contains 120 pairs of SEM images and binary masks used for training.  
-  Google Drive link: (https://drive.google.com/drive/folders/1DjqnzgM3c1_nMMh1jR2URhIaztU3veNU?usp=sharing)
-
-- **Test 80 refined**: Contains 80 pairs of SEM images and binary masks used for testing.  
-  Google Drive link: (https://drive.google.com/drive/folders/1otS5Gp2Gjo6ihtNr60dOFZ_dLGCJ714X?usp=sharing)
-
+- [Google Drive link](https://drive.google.com/drive/folders/1DjqnzgM3c1_nMMh1jR2URhIaztU3veNU?usp=sharing)
+  
 Note: The "Train 120 refined" and "Test 80 refined" datasets are provided as-is and were not further split into validation subsets. The validation sets mentioned in the manuscript were created internally during training using specific data split strategies (e.g., 100:20:80 or 120:40:40), but are not distributed separately in this release.
 
 
