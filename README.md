@@ -15,13 +15,13 @@ This study uses a dataset of 200 annotated SEM images of Plasma Electrolytic Oxi
 - **train 120 refined**: Contains 120 pairs of SEM images and binary masks used for training.  
   [Google Drive link](https://drive.google.com/drive/folders/1Pj50Xzh4O7QDmpdqzrPa7wy1Luj8H3SL?usp=sharing)
 
-- **test 80 refined**: Contains 120 pairs of SEM images and binary masks used for training.  
+- **test 80 refined**: Contains 80 pairs of SEM images and binary masks used for model evaluation.  
   [Google Drive link](https://drive.google.com/drive/folders/1nL9yluKED42pJTm3eplWpEfXBuuOpgXo?usp=sharing)
 
-- **test 40 refined**: Contains 120 pairs of SEM images and binary masks used for training.  
+- **test 40 refined**: Contains 120 pairs of SEM images and binary masks used for model evaluation.  
   [Google Drive link](https://drive.google.com/drive/folders/1otS5Gp2Gjo6ihtNr60dOFZ_dLGCJ714X?usp=sharing)
 
-- **validation 40 refined**: Contains 120 pairs of SEM images and binary masks used for training.  
+- **validation 40 refined**: Contains 120 pairs of SEM images and binary masks used for monitoring training F1 score.  
   [Google Drive link](https://drive.google.com/drive/folders/1wVqP1qeWZD5iE8N0iKqZq3bd-ldme8px?usp=sharing)
 
 
