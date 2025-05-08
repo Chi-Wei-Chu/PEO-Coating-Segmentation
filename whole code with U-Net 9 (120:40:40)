@@ -53,7 +53,6 @@ def f1_score(y_true, y_pred):
     f1 = 2 * (precision * recall) / (precision + recall + tf.keras.backend.epsilon())
     return f1
 
-
 def IoU(y_true, y_pred):
     # Clip predictions and ground truths to binary values (0 or 1)
     y_true = tf.keras.backend.cast(y_true, 'float32')
@@ -131,10 +130,8 @@ for n in tqdm(range(len(X_train))):
 X_train_aug = np.array(X_train_aug, dtype=np.uint8)
 Y_train_aug = np.array(Y_train_aug, dtype=bool)
 
-print("X_train_aug length: ", len(X_train_aug))
-print("Y_train_aug length: ", len(Y_train_aug))
+### validation image ###
 
-# validation images
 X_val = np.zeros((len(val_ids), SIZE, SIZE, IMG_CHANNELS), dtype=np.uint8)
 Y_val = np.zeros((len(val_ids), SIZE, SIZE, 1), dtype=bool)
 
@@ -158,7 +155,8 @@ for index, id_ in tqdm(enumerate(val_ids), total=len(val_ids)):
     mask = np.expand_dims(mask, axis=-1)  # Ensure mask has 3 dimensions
     Y_val[index] = mask
 
-# test images
+### test images ###
+
 X_test = np.zeros((len(test_ids), SIZE, SIZE, IMG_CHANNELS), dtype=np.uint8)
 Y_test = np.zeros((len(test_ids), SIZE, SIZE, 1), dtype=bool)
 
@@ -182,6 +180,7 @@ for index, id_ in tqdm(enumerate(test_ids), total=len(test_ids)):
     mask = np.expand_dims(mask, axis=-1)  # Ensure mask has 3 dimensions
     Y_test[index] = mask
 
+# Set hyperparameters
 NUM_FILTERS = 24
 DROPOUT_RATE = 0.2
 LEARNING_RATE = 0.0005
@@ -233,7 +232,7 @@ model.summary()
 # Define callbacks
 callbacks = [
     tf.keras.callbacks.EarlyStopping(patience=100, monitor='val_f1_score', mode='max', restore_best_weights=True),
-    tf.keras.callbacks.ModelCheckpoint(filepath=f'/content/drive/MyDrive/U-net/segmented_/Final_Test_U-net_9_120img_filter{NUM_FILTERS}_Drop{DROPOUT_RATE}_LR{LEARNING_RATE}_clip{CLIPVALUE}_batchsize{BATCH_SIZE}.keras',
+    tf.keras.callbacks.ModelCheckpoint(filepath=f'/content/drive/MyDrive/U-net/segmented_/Final_Test_U-net_9_120-40-40img_filter{NUM_FILTERS}_Drop{DROPOUT_RATE}_LR{LEARNING_RATE}_clip{CLIPVALUE}_batchsize{BATCH_SIZE}.keras',
                     monitor='val_f1_score', save_best_only=True, mode='max', verbose=1),
     tf.keras.callbacks.TensorBoard(log_dir='logs')
 ]
@@ -249,7 +248,7 @@ results = model.fit(X_train_aug, Y_train_aug, batch_size=BATCH_SIZE, epochs=100,
                     validation_data=(X_val, Y_val), callbacks=callbacks)
 
 # Load the best saved model if needed
-best_model = tf.keras.models.load_model(f'/content/drive/MyDrive/U-net/segmented_/Final_Test_U-net_9_120img_filter{NUM_FILTERS}_Drop{DROPOUT_RATE}_LR{LEARNING_RATE}_clip{CLIPVALUE}_batchsize{BATCH_SIZE}.keras',
+best_model = tf.keras.models.load_model(f'/content/drive/MyDrive/U-net/segmented_/Final_Test_U-net_9_120-40-40img_filter{NUM_FILTERS}_Drop{DROPOUT_RATE}_LR{LEARNING_RATE}_clip{CLIPVALUE}_batchsize{BATCH_SIZE}.keras',
     safe_mode=False, custom_objects={'f1_score': f1_score, 'IoU':IoU})
 
 ### validation image evaluation metrics ###
@@ -276,7 +275,7 @@ f1_validation = metrics.f1_score(Y_test.flatten(), prediction_validation_binary.
 IoU_validation = metrics.jaccard_score(Y_test.flatten(), prediction_validation_binary.flatten())
 
 # Print out the results
-print(f'Final_Test_U-net_9_120img_filter{NUM_FILTERS}_Drop{DROPOUT_RATE}_LR{LEARNING_RATE}_clip{CLIPVALUE}_batchsize{BATCH_SIZE}')
+print(f'Final_Test_U-net_9_120-40-40img_filter{NUM_FILTERS}_Drop{DROPOUT_RATE}_LR{LEARNING_RATE}_clip{CLIPVALUE}_batchsize{BATCH_SIZE}')
 print(f'Accuracy: {accuracy_validation:.4f}')
 print(f'Precision: {precision_validation:.4f}')
 print(f'Recall: {recall_validation:.4f}')
@@ -285,4 +284,4 @@ print(f'IoU: {IoU_validation:.4f}')
 
 # Create a DataFrame from the training history and save to a Excel file
 history_df = pd.DataFrame(results.history)
-history_df.to_excel(f'/content/drive/MyDrive/U-net/segmented_/Final_Test_U-net_9_120img_filter{NUM_FILTERS}_Drop{DROPOUT_RATE}_LR{LEARNING_RATE}_clip{CLIPVALUE}_batchsize{BATCH_SIZE}.xlsx', index=False)
+history_df.to_excel(f'/content/drive/MyDrive/U-net/segmented_/Final_Test_U-net_9_120-40-40img_filter{NUM_FILTERS}_Drop{DROPOUT_RATE}_LR{LEARNING_RATE}_clip{CLIPVALUE}_batchsize{BATCH_SIZE}.xlsx', index=False)
