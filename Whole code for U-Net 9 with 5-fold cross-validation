@@ -13,7 +13,8 @@ from PIL import Image
 import csv
 import pandas as pd
 
-# Ensure reproducibility
+### Ensure reproducibility ###
+
 os.environ['TF_DETERMINISTIC_OPS'] = '1'
 os.environ['CUDA_VISIBLE_DEVICES'] = '0'
 
@@ -24,19 +25,7 @@ tf.random.set_seed(42)
 tf.config.threading.set_intra_op_parallelism_threads(1)
 tf.config.threading.set_inter_op_parallelism_threads(1)
 
-SIZE = 800
-IMG_CHANNELS = 1
-
-TRAIN_PATH = '/content/drive/MyDrive/U-net/All 200 images refined/'
-
-# os.walk is used to get a list of subdirectories within the TRAIN_PATH and TEST_PATH directories,
-# and the resulting subdirectory names are stored in train_ids and test_ids, respectively.
-train_ids = next(os.walk(TRAIN_PATH))[1]   # [1] retrieves only the subdirectories within the current directory
-
-print(train_ids)
-print(len(train_ids))
-
-# Define metrics
+### Define metrics ###
 accuracy_metric = tf.keras.metrics.BinaryAccuracy()
 precision_metric = tf.keras.metrics.Precision()
 recall_metric = tf.keras.metrics.Recall()
@@ -96,7 +85,20 @@ def random_brightness_contrast(image, brightness_range=(0.5, 1.5), contrast_rang
 
     return image
 
-### Train Images ###
+
+### Load Images ###
+
+SIZE = 800
+IMG_CHANNELS = 1
+
+TRAIN_PATH = '/content/drive/MyDrive/U-net/All 200 images refined/'
+
+# os.walk is used to get a list of subdirectories within the TRAIN_PATH and TEST_PATH directories,
+# and the resulting subdirectory names are stored in train_ids and test_ids, respectively.
+train_ids = next(os.walk(TRAIN_PATH))[1]   # [1] retrieves only the subdirectories within the current directory
+
+print(train_ids)
+print(len(train_ids))
 
 # store the preprocessed images and their corresponding binary masks
 # The dtype argument is set to np.uint8 for X_train and np.bool for Y_train to reduce memory usage.
@@ -130,6 +132,9 @@ for index, id_ in tqdm(enumerate(train_ids), total=len(train_ids)):
 print("X_train length: ", len(X_train), "X_train dtype:", X_train.dtype)
 print("Y_train length: ", len(Y_train), "Y_train dtype:", Y_train.dtype)
 
+
+### Iterate through 5-fold cross-validation ###
+
 NUM_FILTERS = 24
 DROPOUT_RATE = 0.2
 LEARNING_RATE = 0.0005
@@ -155,13 +160,14 @@ for train_index, test_index in kf.split(X_train):
     fold = current_fold
     print(f"Fold {current_fold}:")
 
-    # Split the data
+    ### Split the data and Image augmentation ###
+    # training set: 120 / Validation set: 40 / test set: 40
+
     X_train_fold, X_test_fold = X_train[train_index], X_train[test_index]
     Y_train_fold, Y_test_fold = Y_train[train_index], Y_train[test_index]
     X_train_120, X_val, Y_train_120, Y_val = train_test_split(X_train_fold, Y_train_fold, test_size=40/160, random_state=42, shuffle=True)
 
-
-    # Augment only the actual training set
+    # Training set images augmentation
     X_train_aug = []
     Y_train_aug = []
 
@@ -169,6 +175,7 @@ for train_index, test_index in kf.split(X_train):
         augmented_images = []
         augmented_masks = []
 
+        # Rotation
         for angle in [0, 90, 180, 270]:
             augmented_img_rotate = transform.rotate(X_train_120[n], angle, mode='reflect')
             augmented_mask_rotate = (transform.rotate(Y_train_120[n], angle, mode='reflect') > 0.5).astype(bool)
@@ -195,7 +202,7 @@ for train_index, test_index in kf.split(X_train):
     Y_train_aug = np.array(Y_train_aug, dtype=bool)
 
 
-    ## Val images ##
+    # Val set image augmentation
     for n in tqdm(range(len(X_val))):
         Val_image = X_val[n]
         if Val_image.max() <= 1.0:
@@ -204,7 +211,7 @@ for train_index, test_index in kf.split(X_train):
         Val_image = random_brightness_contrast(Val_image, seed=42)  # Apply random adjustments
         X_val[n] = Val_image
 
-    ## Test images ##
+    # Test set images augmentation
     for n in tqdm(range(len(X_test_fold))):
         test_image = X_test_fold[n]
         if test_image.max() <= 1.0:
@@ -232,7 +239,6 @@ for train_index, test_index in kf.split(X_train):
 
     print(f"Shape of an augmented image: {np.shape(X_train_aug[image_x])}")
 
-    ###################
 
     ### Model Architecture ###
     ### U-Net 9 ###
@@ -281,7 +287,7 @@ for train_index, test_index in kf.split(X_train):
     # Define callbacks
     callbacks = [
         tf.keras.callbacks.EarlyStopping(patience=10, monitor='val_f1_score', mode='max', restore_best_weights=True),
-        tf.keras.callbacks.ModelCheckpoint(filepath=f'/content/drive/MyDrive/U-net/segmented_/Final_5fold_ES_Atrous_Decoder_1x1_U-net_9_K{fold}_200img_filter{NUM_FILTERS}_Drop{DROPOUT_RATE}_LR{LEARNING_RATE}_clip{CLIPVALUE}_batchsize{BATCH_SIZE}.keras',
+        tf.keras.callbacks.ModelCheckpoint(filepath=f'/content/drive/MyDrive/U-net/segmented_/Final_5fold_ES_U-net_9_K{fold}_200img_filter{NUM_FILTERS}_Drop{DROPOUT_RATE}_LR{LEARNING_RATE}_clip{CLIPVALUE}_batchsize{BATCH_SIZE}.keras',
                         monitor='val_f1_score', save_best_only=True, mode='max', verbose=1),
         tf.keras.callbacks.TensorBoard(log_dir='logs')
     ]
@@ -296,13 +302,11 @@ for train_index, test_index in kf.split(X_train):
     results = model.fit(X_train_aug, Y_train_aug, batch_size=BATCH_SIZE, epochs=100,
                         validation_data=(X_val, Y_val), callbacks=callbacks)
 
-    # Load the best saved model if needed
-    best_model = tf.keras.models.load_model(f'/content/drive/MyDrive/U-net/segmented_/Final_5fold_ES_Atrous_Decoder_1x1_U-net_9_K{fold}_200img_filter{NUM_FILTERS}_Drop{DROPOUT_RATE}_LR{LEARNING_RATE}_clip{CLIPVALUE}_batchsize{BATCH_SIZE}.keras',
+    # Load the best saved model
+    best_model = tf.keras.models.load_model(f'/content/drive/MyDrive/U-net/segmented_/Final_5fold_ES__U-net_9_K{fold}_200img_filter{NUM_FILTERS}_Drop{DROPOUT_RATE}_LR{LEARNING_RATE}_clip{CLIPVALUE}_batchsize{BATCH_SIZE}.keras',
         safe_mode=False, custom_objects={'f1_score': f1_score, 'IoU':IoU})
 
-    #######################################################################################
-
-    ### validation image evaluation metrics ###
+    ### Make test set predictions in batches ###
     def batch_predict(model, data, batch_size):
       predictions = []
       for i in range(0, len(data), batch_size):
@@ -337,7 +341,8 @@ for train_index, test_index in kf.split(X_train):
     print(f'F1 Score_K{fold}: {f1_test:.4f}')
     print(f'IoU_K{fold}: {IoU_test:.4f}')
 
-    # Create a DataFrame from the training history and save to a Excel file
+
+    ### Create a DataFrame from the training history and save to a Excel file ###
     history_df = pd.DataFrame(results.history)
     history_df.to_excel(f'/content/drive/MyDrive/U-net/segmented_/training_history_Final_5fold_ES_Atrous_Decoder_1x1_U-net_9_K{fold}_200img_filter{NUM_FILTERS}_Drop{DROPOUT_RATE}_LR{LEARNING_RATE}_clip{CLIPVALUE}_batchsize{BATCH_SIZE}.xlsx', index=False)
 
@@ -353,6 +358,8 @@ for train_index, test_index in kf.split(X_train):
 
     # fold += 1
     current_fold += 1
+
+### Present average and standard deviation of the 5-fold CV evaluation metricss ###
 Ave_Accuracy = sum(Accuracy) / 5
 Ave_Precision = sum(Precision) / 5
 Ave_Recall = sum(Recall) / 5
@@ -365,8 +372,6 @@ SD_Recall = np.std(Recall)
 SD_F1_score = np.std(F1_score)
 SD_IoU = np.std(IoU_scores)
 
-###################################################################
-
 print(f'Final_5fold_ES_Atrous_Decoder_1x1_U-net_9_K{fold}_200img_filter{NUM_FILTERS}_Drop{DROPOUT_RATE}_LR{LEARNING_RATE}_clip{CLIPVALUE}_batchsize{BATCH_SIZE}')
 print(f'Average Accuracy: {Ave_Accuracy:.4f} ± {SD_Accuracy:.5f}')
 print(f'Average Precision: {Ave_Precision:.4f} ± {SD_Precision:.5f}')
@@ -374,6 +379,8 @@ print(f'Average Recall: {Ave_Recall:.4f} ± {SD_Recall:.5f}')
 print(f'Average F1 Score: {Ave_F1_score:.4f} ± {SD_F1_score:.5f}')
 print(f'Average IoU: {Ave_IoU:.4f} ± {SD_IoU:.5f}')
 
+
+### Bootstrap analysis using 10000 iterations ###
 def bootstrap_ci(data, num_iterations=10000, ci=95):
     data = np.array(data)
     boot_means = []
